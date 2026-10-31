@@ -22,7 +22,8 @@ def test_frame_contents(cfg):
     sim = OfflineSimulator(cfg, "obstacle")
     f = sim.reset()
     h, w = cfg["cameras"]["height"], cfg["cameras"]["width"]
-    assert f.left.shape == (h, w, 3) and f.right.shape == (h, w, 3)
+    assert set(f.images) == set(cfg["cameras"]["rig"])
+    assert all(img.shape == (h, w, 3) for img in f.images.values())
     assert not np.array_equal(f.left, f.right)
     assert f.route.shape[1] == 2 and f.route[0, 0] < 1.0
     assert f.ground_truth[0].cls == "car"
@@ -90,3 +91,11 @@ def test_intersection_turn(cfg):
     assert m["actions"].get("TURN", 0) > 50
     assert m["completion"] > 0.9
     assert m["lane_error_mean_m"] < 0.3
+
+
+@pytest.mark.slow
+def test_blind_spot_waits_for_car_from_behind(cfg):
+    m = run(cfg, "sim", "blind_spot")
+    assert m["collisions"] == 0
+    assert m["overtakes"] == 1                                # no aborted / unsafe pull-out
+    assert m["completion"] > 0.9

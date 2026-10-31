@@ -40,8 +40,9 @@ def main():
     (args.out / "images").mkdir(parents=True, exist_ok=True)
     (args.out / "masks").mkdir(parents=True, exist_ok=True)
     cam = cfg["cameras"]
-    x, y, z, pitch = camera_transforms(cam, cfg["vehicle"]["wheelbase"])["left"]
-    tf = carla.Transform(carla.Location(x=x, y=y, z=z), carla.Rotation(pitch=pitch))
+    lane_cam = cam["stereo_pair"][0]
+    x, y, z, pitch, yaw = camera_transforms(cam, cfg["vehicle"]["wheelbase"])[lane_cam]
+    tf = carla.Transform(carla.Location(x=x, y=y, z=z), carla.Rotation(pitch=pitch, yaw=yaw))
 
     ego = EgoVehicle(carla, world, cfg["carla"]["vehicle_blueprint"], conn.map.get_spawn_points()[0])
     ego.actor.set_autopilot(True, conn.traffic_manager.get_port())
@@ -50,7 +51,7 @@ def main():
         bp = world.get_blueprint_library().find(kind)
         bp.set_attribute("image_size_x", str(cam["width"]))
         bp.set_attribute("image_size_y", str(cam["height"]))
-        bp.set_attribute("fov", str(cam["fov"]))
+        bp.set_attribute("fov", str(cam["rig"][lane_cam]["fov"]))
         s = world.spawn_actor(bp, tf, attach_to=ego.actor)
         q: queue.Queue = queue.Queue()
         s.listen(q.put)

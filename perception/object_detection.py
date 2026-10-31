@@ -43,9 +43,11 @@ class YoloDetector:
             out.append(dets)
         return out
 
-    def detect_pair(self, frame: Frame, cams) -> tuple[list[Detection], list[Detection]]:
-        left, right = self.detect_images([frame.left, frame.right])
-        return left, right
+    def detect_all(self, frame: Frame, cams: dict) -> dict[str, list[Detection]]:
+        """One batched YOLO call over every camera image."""
+        names = [n for n in cams if n in frame.images]
+        results = self.detect_images([frame.images[n] for n in names])
+        return dict(zip(names, results))
 
 
 class GroundTruthDetector:
@@ -57,7 +59,7 @@ class GroundTruthDetector:
     def detect(self, frame: Frame, cam: PinholeCamera) -> list[Detection]:
         out = []
         for obj in frame.ground_truth:
-            if obj.x < 0 or np.hypot(obj.x, obj.y) > self.max_range:
+            if np.hypot(obj.x, obj.y) > self.max_range:
                 continue
             c, s = np.cos(obj.yaw), np.sin(obj.yaw)
             corners = []
@@ -78,8 +80,8 @@ class GroundTruthDetector:
             out.append(Detection(obj.cls, (x1 + jitter[0], y1 + jitter[1], x2 + jitter[2], y2 + jitter[3]), 0.99))
         return out
 
-    def detect_pair(self, frame: Frame, cams) -> tuple[list[Detection], list[Detection]]:
-        return self.detect(frame, cams[0]), self.detect(frame, cams[1])
+    def detect_all(self, frame: Frame, cams: dict) -> dict[str, list[Detection]]:
+        return {name: self.detect(frame, cam) for name, cam in cams.items()}
 
 
 def make_detector(cfg: dict, backend: str):

@@ -10,8 +10,7 @@ import numpy as np
 @dataclass
 class Frame:
     """One synchronised sensor snapshot from a simulator backend."""
-    left: np.ndarray                 # HxWx3 BGR image from the front-left camera
-    right: np.ndarray                # HxWx3 BGR image from the front-right camera
+    images: dict[str, np.ndarray]    # camera name -> HxWx3 BGR image (all cameras of the rig)
     speed: float                     # m/s
     timestamp: float
     route: np.ndarray                # Nx2 route centreline ahead, vehicle frame (x fwd, y left)
@@ -20,6 +19,16 @@ class Frame:
     left_lane_available: bool = True
     ground_truth: list = field(default_factory=list)   # GroundTruthObject list (sim / CARLA debug only)
     route_finished: bool = False
+    yaw_rate: float = 0.0            # rad/s, + = turning left (IMU / odometry)
+    stereo_pair: tuple[str, str] = ("front_left", "front_right")
+
+    @property
+    def left(self) -> np.ndarray:
+        return self.images[self.stereo_pair[0]]
+
+    @property
+    def right(self) -> np.ndarray:
+        return self.images[self.stereo_pair[1]]
 
 
 @dataclass
@@ -70,13 +79,25 @@ class LaneEstimate:
 
 @dataclass
 class TrackedObject:
+    """An object in the 3D world model (vehicle frame). Velocity and prediction come from the tracker."""
     cls: str
-    x: float                         # metres ahead
+    x: float                         # metres ahead (negative = behind)
     y: float                         # metres to the left
     distance: float
     conf: float
     source: str                      # "stereo" | "mono"
     bbox: tuple[float, float, float, float] | None = None
+    camera: str = ""
+    track_id: int | None = None
+    vx: float = 0.0                  # ground velocity (m/s) expressed in the vehicle frame
+    vy: float = 0.0
+    velocity_valid: bool = False     # tracker has seen it long enough to trust the velocity
+    predicted: np.ndarray | None = None   # Kx3 (t, x, y) future positions, vehicle frame at time now
+    age: float = 0.0
+
+    @property
+    def speed(self) -> float:
+        return float(np.hypot(self.vx, self.vy))
 
 
 @dataclass

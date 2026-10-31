@@ -24,11 +24,15 @@ carla:
 cameras:
   width: 640
   height: 360
-  fov: 90.0
-  baseline: 0.54        # metres between the two cameras (KITTI-like stereo rig)
-  mount_x: 1.5          # metres ahead of the rear axle
-  mount_z: 1.6          # height above ground
-  pitch_deg: -8.0       # negative tilts the cameras down towards the road
+  # Front stereo pair: lane detection + accurate distance (disparity between the two images).
+  stereo_pair: [front_left, front_right]
+  # x/y/z in metres from the rear axle (y = left), yaw/pitch in degrees (yaw + = left, pitch - = down).
+  rig:
+    front_left:     {x: 1.5, y: 0.27,  z: 1.6,  yaw: 0.0,    pitch: -8.0,  fov: 90.0}
+    front_right:    {x: 1.5, y: -0.27, z: 1.6,  yaw: 0.0,    pitch: -8.0,  fov: 90.0}
+    # Side "repeater" cameras on the mirrors looking backwards: blind spots + cars coming up from behind.
+    left_repeater:  {x: 2.0, y: 0.95,  z: 1.15, yaw: 130.0,  pitch: -12.0, fov: 120.0}
+    right_repeater: {x: 2.0, y: -0.95, z: 1.15, yaw: -130.0, pitch: -12.0, fov: 120.0}
 
 vehicle:
   wheelbase: 2.9
@@ -59,10 +63,22 @@ planning:
   min_follow_gap: 6.0
   time_gap: 1.6              # seconds, for adaptive cruise control
   stop_sign_wait: 2.0
+  pedestrian_prediction_horizon: 3.0   # s: react to pedestrians predicted to walk into our path
+  cut_in_prediction_horizon: 1.5       # s: react to cars predicted to cut into our lane
   lookahead_min: 5.0
   lookahead_gain: 0.6        # lookahead = min + gain * speed
 
 control:
+  lateral: mpc               # mpc (model predictive control) | pid (PID on pure-pursuit angle)
+  mpc:
+    horizon: 2.0             # seconds of the car's own future simulated each tick
+    step: 0.1
+    switch_time: 0.6         # each plan = one steering angle, then a second one after this time
+    actuator_tau: 0.1        # steering lag of the car (s)
+    w_lateral: 1.0
+    w_heading: 2.0
+    w_steer: 0.05
+    w_rate: 8.0
   steering: {kp: 1.0, ki: 0.05, kd: 0.05, limit: 1.0}
   speed: {kp: 0.45, ki: 0.08, kd: 0.02, limit: 1.0}
   max_brake_decel: 8.0

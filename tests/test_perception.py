@@ -88,9 +88,8 @@ def test_stereo_fusion_locates_car(cfg, dist):
     sim.actors = [car(dist + 1.5 + 2.25, 0.0)]         # place its centre roughly `dist` ahead of the cameras
     frame = place(sim, 0.0)
     det = GroundTruthDetector(pixel_noise=0.0)
-    fusion = CameraFusion(cfg, sim.cam_left, sim.cam_right)
-    dl, dr = det.detect_pair(frame, (sim.cam_left, sim.cam_right))
-    objs = fusion.locate_objects(frame, dl, dr)
+    fusion = CameraFusion(cfg, sim.cams)
+    objs = fusion.locate_objects(frame, det.detect_all(frame, sim.cams))
     assert len(objs) == 1 and objs[0].source == "stereo"
     gt = frame.ground_truth[0]
     # Box-centre disparity measures (close to) the visible rear face of the car.
@@ -103,9 +102,9 @@ def test_mono_fallback_for_object_seen_by_one_camera(cfg):
     sim.reset()
     sim.actors = [pedestrian(9.0, -4.6, -4.6, None)]
     frame = place(sim, 0.0)
-    dl, dr = GroundTruthDetector(pixel_noise=0.0).detect_pair(frame, (sim.cam_left, sim.cam_right))
-    fusion = CameraFusion(cfg, sim.cam_left, sim.cam_right)
-    objs = fusion.locate_objects(frame, dl, [])
+    dets = GroundTruthDetector(pixel_noise=0.0).detect_all(frame, sim.cams)
+    dets["front_right"] = []
+    objs = CameraFusion(cfg, sim.cams).locate_objects(frame, dets)
     assert len(objs) == 1 and objs[0].source == "mono"
     assert abs(objs[0].x - frame.ground_truth[0].x) < 1.5
 
@@ -118,3 +117,21 @@ def test_dense_stereo_disparity_on_render(cfg):
     disp = DenseStereo().disparity(frame.left, frame.right)
     assert disp.shape == frame.left.shape[:2]
     assert (disp > 0).mean() > 0.05
+
+
+@pytest.mark.parametrize("pos", [(-12.0, 3.5), (-25.0, 3.5), (-1.0, -3.5), (-30.0, 0.0)])
+def test_rear_cameras_locate_cars_behind(cfg, pos):
+    """Cars behind / beside us are only visible to the rear-facing side cameras."""
+    sim = OfflineSimulator(cfg, "obstacle")
+    sim.reset()
+    s_ego = 60.0
+    sim.actors = [car(s_ego + pos[0], pos[1])]
+    frame = place(sim, s_ego)
+    dets = GroundTruthDetector(pixel_noise=0.0).detect_all(frame, sim.cams)
+    assert not dets["front_left"] and not dets["front_right"]
+    assert dets["left_repeater"] or dets["right_repeater"]
+    objs = CameraFusion(cfg, sim.cams).locate_objects(frame, dets)
+    assert len(objs) == 1                                      # one object even if both side cameras see it
+    gt = frame.ground_truth[0]
+    assert abs(objs[0].y - gt.y) < 1.5
+    assert abs(objs[0].x - gt.x) < 0.25 * abs(gt.x) + 2.5

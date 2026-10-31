@@ -17,6 +17,8 @@ class PinholeCamera:
     fov_deg: float
     position: np.ndarray          # (x, y, z) mount position in the vehicle frame
     pitch_deg: float = 0.0        # negative = looking down
+    yaw_deg: float = 0.0          # positive = turned to the left (90 = looking out of the left side)
+    name: str = ""
 
     def __post_init__(self):
         self.position = np.asarray(self.position, dtype=np.float64)
@@ -24,11 +26,11 @@ class PinholeCamera:
         self.fy = self.fx
         self.cx = self.width / 2.0
         self.cy = self.height / 2.0
-        p = math.radians(self.pitch_deg)
-        # Camera axes expressed in the vehicle frame.
-        self.forward = np.array([math.cos(p), 0.0, math.sin(p)])
-        self.left = np.array([0.0, 1.0, 0.0])
-        self.up = np.array([-math.sin(p), 0.0, math.cos(p)])
+        p, y = math.radians(self.pitch_deg), math.radians(self.yaw_deg)
+        # Camera axes expressed in the vehicle frame (yaw first, then pitch, no roll).
+        self.forward = np.array([math.cos(p) * math.cos(y), math.cos(p) * math.sin(y), math.sin(p)])
+        self.left = np.array([-math.sin(y), math.cos(y), 0.0])
+        self.up = np.array([-math.sin(p) * math.cos(y), -math.sin(p) * math.sin(y), math.cos(p)])
         # Rows map vehicle-frame offsets to optical (X right, Y down, Z forward).
         self.R = np.stack([-self.left, -self.up, self.forward])
 
@@ -73,13 +75,28 @@ class PinholeCamera:
         return self.position + depth * d
 
 
+def make_camera(name: str, cam_cfg: dict) -> PinholeCamera:
+    c = cam_cfg["rig"][name]
+    return PinholeCamera(width=cam_cfg["width"], height=cam_cfg["height"], fov_deg=c["fov"],
+                         position=np.array([c["x"], c["y"], c["z"]]), pitch_deg=c.get("pitch", 0.0),
+                         yaw_deg=c.get("yaw", 0.0), name=name)
+
+
+def make_rig(cam_cfg: dict) -> dict[str, PinholeCamera]:
+    """All cameras of the rig, keyed by name (the stereo pair first)."""
+    names = list(cam_cfg["stereo_pair"]) + [n for n in cam_cfg["rig"] if n not in cam_cfg["stereo_pair"]]
+    return {n: make_camera(n, cam_cfg) for n in names}
+
+
 def make_stereo_pair(cam_cfg: dict) -> tuple[PinholeCamera, PinholeCamera]:
-    half = cam_cfg["baseline"] / 2.0
-    common = dict(width=cam_cfg["width"], height=cam_cfg["height"], fov_deg=cam_cfg["fov"],
-                  pitch_deg=cam_cfg["pitch_deg"])
-    left = PinholeCamera(position=np.array([cam_cfg["mount_x"], +half, cam_cfg["mount_z"]]), **common)
-    right = PinholeCamera(position=np.array([cam_cfg["mount_x"], -half, cam_cfg["mount_z"]]), **common)
-    return left, right
+    left, right = cam_cfg["stereo_pair"]
+    return make_camera(left, cam_cfg), make_camera(right, cam_cfg)
+
+
+def stereo_focal_baseline(cam_cfg: dict) -> float:
+    """fx * B of the front stereo pair: depth = fx * B / disparity."""
+    left, right = make_stereo_pair(cam_cfg)
+    return left.fx * float(np.linalg.norm(left.position - right.position))
 
 
 def wrap_angle(a: float) -> float:

@@ -41,12 +41,13 @@ def run(cfg: dict, backend: str = "sim", scenario: str | None = None, max_steps:
     metrics = MetricsRecorder(cfg["dt"])
     writer = None
     max_steps = max_steps or cfg["max_steps"]
-    log.info("backend=%s scenario=%s lane=%s detector=%s", backend, scenario or cfg.get("scenario"),
-             pilot.lanes.method, pilot.detector_kind)
+    log.info("backend=%s scenario=%s lane=%s detector=%s controller=%s cameras=%s", backend,
+             scenario or cfg.get("scenario"), pilot.lanes.method, pilot.detector_kind, pilot.lateral,
+             ",".join(pilot.cams))
     try:
         frame = sim.reset()
         if getattr(sim, "max_steer_deg", None):
-            pilot.steering.set_max_steer(sim.max_steer_deg)
+            pilot.set_max_steer(sim.max_steer_deg)
         last_action = None
         for step in range(max_steps):
             res = pilot.tick(frame)
@@ -59,7 +60,7 @@ def run(cfg: dict, backend: str = "sim", scenario: str | None = None, max_steps:
                 log.info("t=%6.2fs  v=%.1f lane=%s", frame.timestamp, frame.speed,
                          None if res.world.lane is None else round(res.world.lane.offset, 2))
             if display or video:
-                vis = draw_overlay(frame, res, pilot.cam_left)
+                vis = draw_overlay(frame, res, pilot.cams, cfg["vehicle"])
                 if video:
                     if writer is None:
                         Path(video).parent.mkdir(parents=True, exist_ok=True)
@@ -93,6 +94,7 @@ def main(argv=None):
     ap.add_argument("--video", help="save an annotated .mp4")
     ap.add_argument("--lane-method", choices=["auto", "cnn", "classical"])
     ap.add_argument("--detector", choices=["auto", "yolo", "ground_truth"])
+    ap.add_argument("--controller", choices=["mpc", "pid"], help="lateral controller")
     ap.add_argument("--metrics", help="write the metrics summary JSON here")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
@@ -103,6 +105,8 @@ def main(argv=None):
         overrides["perception"]["lane_method"] = args.lane_method
     if args.detector:
         overrides["perception"]["detector"] = args.detector
+    if args.controller:
+        overrides["control"] = {"lateral": args.controller}
     cfg = load_config(args.config, overrides)
     backend = args.backend or cfg["backend"]
 

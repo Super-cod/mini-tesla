@@ -8,7 +8,7 @@ import math
 import numpy as np
 
 from simulation.base import Simulator
-from simulation.camera_setup import StereoRig
+from simulation.camera_setup import CameraRig
 from simulation.carla_connection import CarlaConnection, carla_to_rh, carla_yaw_to_rh, rear_axle_pose
 from simulation.vehicle import EgoVehicle
 from utils.geometry import world_to_vehicle
@@ -48,7 +48,7 @@ class CarlaSimulator(Simulator):
         self.conn = CarlaConnection(cfg)
         self.carla = self.conn.carla
         self.ego: EgoVehicle | None = None
-        self.rig: StereoRig | None = None
+        self.rig: CameraRig | None = None
 
     @property
     def max_steer_deg(self) -> float | None:
@@ -60,7 +60,7 @@ class CarlaSimulator(Simulator):
         start = points[c["spawn_point"] % len(points)]
         end = points[c["destination_point"] % len(points)]
         self.ego = EgoVehicle(self.carla, self.conn.world, c["vehicle_blueprint"], start)
-        self.rig = StereoRig(self.carla, self.conn.world, self.ego.actor, self.cfg["cameras"], self.wheelbase)
+        self.rig = CameraRig(self.carla, self.conn.world, self.ego.actor, self.cfg["cameras"], self.wheelbase)
         self.route = plan_route(self.conn.map, start.location, end.location)
         self.route_xy = np.array([carla_to_rh(w.transform.location.x, w.transform.location.y) for w in self.route])
         self.route_idx = 0
@@ -97,7 +97,7 @@ class CarlaSimulator(Simulator):
         return out
 
     def _frame(self, frame_id: int) -> Frame:
-        left, right = self.rig.read(frame_id)
+        images = self.rig.read(frame_id)
         tf = self.ego.actor.get_transform()
         self._follow_spectator(tf)
         ego_xy, ego_yaw = rear_axle_pose(tf, self.wheelbase)
@@ -119,7 +119,9 @@ class CarlaSimulator(Simulator):
                        and left_wp.lane_id * wp.lane_id > 0
                        and (wp.lane_change & self.carla.LaneChange.Left))
         self._last = (ego_xy, ego_yaw)
-        return Frame(left=left, right=right, speed=self.ego.speed, timestamp=self.t, route=route,
+        yaw_rate = -math.radians(self.ego.actor.get_angular_velocity().z)     # CARLA: deg/s, clockwise +
+        return Frame(images=images, speed=self.ego.speed, timestamp=self.t, route=route, yaw_rate=yaw_rate,
+                     stereo_pair=tuple(self.cfg["cameras"]["stereo_pair"]),
                      at_junction=at_junction, lane_width=float(wp.lane_width), left_lane_available=left_ok,
                      ground_truth=self._ground_truth(ego_xy, ego_yaw),
                      route_finished=self.route_idx >= len(self.route) - 6)
