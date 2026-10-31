@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+data/
+runs/
+outputs/
+*.mp4
+*.avi
+yolov8*.pt
+yolo11*.pt
+!models/weights/lane_cnn.pt

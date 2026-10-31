@@ -1,0 +1,9 @@
+numpy>=1.24
+opencv-python>=4.8
+pyyaml>=6.0
+torch>=2.1            # install the CUDA build from https://pytorch.org for GPU training/inference
+pytest>=7.4
+
+# Optional
+ultralytics>=8.1      # YOLO object detection (needed for --backend carla with detector: yolo)
+# carla==0.9.16       # must match the CARLA server version you run

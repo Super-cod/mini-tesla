@@ -1,0 +1,68 @@
+# Mini Tesla configuration.
+# Coordinate convention used everywhere inside the stack (vehicle frame):
+#   x = forward, y = left, z = up, origin on the ground under the rear axle.
+# The CARLA backend converts to/from CARLA's left-handed frame (y = right).
+
+backend: sim            # "sim" (built-in offline simulator) or "carla"
+scenario: full          # sim scenarios: lane_keep, curve, pedestrian, obstacle, follow, turn, full
+max_steps: 1500
+dt: 0.05                # seconds per simulation tick (20 Hz)
+seed: 7
+
+carla:
+  host: localhost
+  port: 2000
+  timeout: 10.0
+  town: Town03
+  vehicle_blueprint: vehicle.tesla.model3
+  spawn_point: 0
+  destination_point: 40
+  traffic_vehicles: 15
+  traffic_walkers: 20
+  synchronous: true
+
+cameras:
+  width: 640
+  height: 360
+  fov: 90.0
+  baseline: 0.54        # metres between the two cameras (KITTI-like stereo rig)
+  mount_x: 1.5          # metres ahead of the rear axle
+  mount_z: 1.6          # height above ground
+  pitch_deg: -8.0       # negative tilts the cameras down towards the road
+
+vehicle:
+  wheelbase: 2.9
+  length: 4.7
+  width: 1.9
+  max_steer_deg: 35.0
+
+perception:
+  detector: auto        # auto | yolo | ground_truth   (auto: ground_truth in sim, yolo in CARLA)
+  yolo_weights: yolov8n.pt
+  yolo_conf: 0.35
+  lane_method: auto     # auto | cnn | classical      (auto: cnn if weights exist, else classical)
+  lane_weights: models/weights/lane_cnn.pt
+  lane_cnn_input: [128, 256]   # H, W fed to the network
+  lane_threshold: 0.5
+  lane_x_range: [4.0, 30.0]    # metres of road ahead used to fit the lane
+  stereo_method: boxes  # boxes (disparity between matched YOLO boxes) | sgbm (dense block matching)
+
+planning:
+  cruise_speed: 8.0          # m/s (~29 km/h)
+  junction_speed: 4.5
+  lane_lost_speed: 3.0
+  lane_width: 3.5
+  path_half_width: 1.5       # corridor half width used for "object is in my path"
+  pedestrian_stop_distance: 14.0
+  obstacle_detect_distance: 30.0
+  avoid_trigger_distance: 18.0
+  min_follow_gap: 6.0
+  time_gap: 1.6              # seconds, for adaptive cruise control
+  stop_sign_wait: 2.0
+  lookahead_min: 5.0
+  lookahead_gain: 0.6        # lookahead = min + gain * speed
+
+control:
+  steering: {kp: 1.0, ki: 0.05, kd: 0.05, limit: 1.0}
+  speed: {kp: 0.45, ki: 0.08, kd: 0.02, limit: 1.0}
+  max_brake_decel: 8.0
