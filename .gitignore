@@ -11,3 +11,4 @@ outputs/
 yolov8*.pt
 yolo11*.pt
 !models/weights/lane_cnn.pt
+!docs/*.mp4

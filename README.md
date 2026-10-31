@@ -14,7 +14,9 @@ can be developed and tested on a laptop without CARLA installed.
                                                   covariance)        │    compensated)
 ```
 
-![demo](docs/demo_full.png)
+![demo](docs/demo_preview.gif)
+
+**Demo videos:** [full route (70 s)](docs/demo_full.mp4) · [blind spot: waiting for a car from behind (40 s)](docs/demo_blind_spot.mp4)
 
 *Top left: front camera with the CNN lane mask (green), planned path (yellow) and MPC-predicted
 trajectory (magenta). Top right: the 3D world model from above, showing camera coverage, tracked
